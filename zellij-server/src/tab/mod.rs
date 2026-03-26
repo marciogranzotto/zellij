@@ -6541,9 +6541,12 @@ impl Tab {
                 },
             };
         }
-        // Clear mouse selection state if the closing pane is the one being selected
+        // Clear mouse state if the closing pane is involved in a mouse gesture
         if self.selecting_with_mouse_in_pane == Some(id) {
             self.selecting_with_mouse_in_pane = None;
+        }
+        if self.pane_being_resized_with_mouse.as_ref().map(|r| r.pane_id) == Some(id) {
+            self.pane_being_resized_with_mouse = None;
         }
         let closed_pane = if self.floating_panes.panes_contain(&id) {
             let closed_pane = self.floating_panes.remove_pane(id);
