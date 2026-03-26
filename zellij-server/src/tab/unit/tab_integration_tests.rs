@@ -19738,3 +19738,34 @@ fn mouse_selection_state_cleared_when_pane_is_closed_during_selection() {
     )
     .unwrap();
 }
+
+#[test]
+fn mouse_selection_state_cleared_when_client_drains_from_tab() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let client_id = 1;
+    let mode_info = ModeInfo::default();
+    let mut tab = create_new_tab(size, mode_info);
+
+    // Start selection
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_some(),
+        "selection should be in progress"
+    );
+
+    // Simulate tab switch — drain the client from this tab
+    tab.drain_connected_clients(None);
+
+    // The selection flag should be cleared
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_none(),
+        "selection flag must be cleared when clients are drained (tab switch)"
+    );
+}

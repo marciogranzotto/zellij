@@ -2634,6 +2634,12 @@ impl Tab {
         for client_id in clients_to_drain {
             client_ids_to_mode_infos.push(self.drain_single_client(client_id));
         }
+        // Clear any in-progress mouse state that would otherwise be stuck
+        // without a client to complete the mouse gesture.
+        if self.connected_clients.borrow().is_empty() {
+            self.selecting_with_mouse_in_pane = None;
+            self.pane_being_resized_with_mouse = None;
+        }
         client_ids_to_mode_infos
     }
     pub fn drain_single_client(&mut self, client_id: ClientId) -> (ClientId, ModeInfo) {
