@@ -2624,6 +2624,7 @@ impl Tab {
         if self.connected_clients.borrow().is_empty() {
             self.selecting_with_mouse_in_pane = None;
             self.pane_being_resized_with_mouse = None;
+            self.floating_panes.clear_pane_being_moved_with_mouse();
         }
         if is_connected_to_this_tab || was_dimmed {
             self.set_client_dimmed(client_id, false);
@@ -2646,6 +2647,7 @@ impl Tab {
         if self.connected_clients.borrow().is_empty() {
             self.selecting_with_mouse_in_pane = None;
             self.pane_being_resized_with_mouse = None;
+            self.floating_panes.clear_pane_being_moved_with_mouse();
         }
         client_ids_to_mode_infos
     }

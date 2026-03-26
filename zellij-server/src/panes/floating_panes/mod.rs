@@ -1724,6 +1724,9 @@ impl FloatingPanes {
     pub fn pane_is_being_moved_with_mouse(&self) -> bool {
         self.pane_being_moved_with_mouse.is_some()
     }
+    pub fn clear_pane_being_moved_with_mouse(&mut self) {
+        self.pane_being_moved_with_mouse = None;
+    }
     pub fn move_pane_to_position(&mut self, click_position: &Position) -> bool {
         // true => changed position
         let display_area = *self.display_area.borrow();

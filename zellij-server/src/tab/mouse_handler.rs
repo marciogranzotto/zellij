@@ -600,6 +600,9 @@ impl MouseHandler {
             if tab.pane_being_resized_with_mouse.is_some() {
                 tab.pane_being_resized_with_mouse = None;
             }
+            if tab.floating_panes.pane_is_being_moved_with_mouse() {
+                tab.floating_panes.clear_pane_being_moved_with_mouse();
+            }
         }
         let click_count = Self::count_click(tab, event, client_id);
         let mut context =
