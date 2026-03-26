@@ -19814,3 +19814,53 @@ fn close_pane_clears_mouse_selection_state_for_that_pane() {
         "close_pane must clear selection flag for the closed pane"
     );
 }
+
+#[test]
+fn stuck_mouse_selection_recovers_on_next_left_press() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let client_id = 1;
+    let mode_info = ModeInfo::default();
+    let mut tab = create_new_tab(size, mode_info);
+
+    // Start selection
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_some(),
+        "selection should be in progress"
+    );
+
+    // Simulate lost Release (e.g., window focus loss) — don't send a Release.
+    // Instead, send a new left Press directly. This means the user clicked again,
+    // so the old selection gesture is definitively over.
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_press_event(Position::new(8, 20)),
+        client_id,
+    )
+    .unwrap();
+
+    // The new press should have started a fresh selection (or been handled normally),
+    // NOT been swallowed as NoAction by the selection guard.
+    // The old stuck state should be cleared and a new selection started.
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_some(),
+        "a new selection should have started from the second press"
+    );
+
+    // Release should work normally
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_release_event(Position::new(8, 25)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_none(),
+        "selection flag should be cleared after release"
+    );
+}

@@ -590,6 +590,17 @@ impl MouseHandler {
             return Ok(effect);
         }
         Self::forget_unfinished_pane_drawing(tab, event, client_id);
+        // Safety reset: if a new left Press arrives while a selection is in progress,
+        // the previous gesture ended without a Release (e.g., window lost focus).
+        // Clear the stale selection state so this Press is handled normally.
+        // Only left Press triggers this — right/middle clicks during a drag should
+        // not cancel the selection.
+        if tab.selecting_with_mouse_in_pane.is_some()
+            && event.event_type == MouseEventType::Press
+            && event.left
+        {
+            tab.selecting_with_mouse_in_pane = None;
+        }
         let click_count = Self::count_click(tab, event, client_id);
         let mut context =
             Self::gather_mouse_event_context(tab, event, client_id, passthrough_pane_id)?;
