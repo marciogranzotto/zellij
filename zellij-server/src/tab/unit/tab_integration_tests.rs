@@ -19635,3 +19635,48 @@ fn closing_a_pane_keeps_resurrected_bars_in_place_with_pre_bars_plugin_aliases()
     );
     assert_bars_in_place(tab_bar, status_bar);
 }
+
+#[test]
+fn mouse_selection_state_cleared_even_when_terminal_wants_mouse() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let client_id = 1;
+    let mode_info = ModeInfo::default();
+    let mut tab = create_new_tab(size, mode_info);
+
+    // Start selection (terminal does NOT want mouse yet)
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_some(),
+        "selection should start on left press"
+    );
+
+    // Now enable mouse tracking on the terminal (simulates an app like vim starting)
+    // DEC mode 1000 = Normal mouse tracking, SGR mode 1006
+    tab.handle_pty_bytes(1, Vec::from("\x1b[?1000h\x1b[?1006h".as_bytes()))
+        .unwrap();
+
+    // Release — terminal now wants mouse, so mouse_left_click_release returns Some
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_release_event(Position::new(5, 15)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_none(),
+        "selection flag must be cleared even when terminal wants mouse"
+    );
+
+    // Verify right-click works (not swallowed by stuck selection guard)
+    tab.handle_mouse_event(
+        &MouseEvent::new_right_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+}
