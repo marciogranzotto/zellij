@@ -6534,6 +6534,10 @@ impl Tab {
                 },
             };
         }
+        // Clear mouse selection state if the closing pane is the one being selected
+        if self.selecting_with_mouse_in_pane == Some(id) {
+            self.selecting_with_mouse_in_pane = None;
+        }
         let closed_pane = if self.floating_panes.panes_contain(&id) {
             let closed_pane = self.floating_panes.remove_pane(id);
             if !self.floating_panes.has_selectable_panes() {

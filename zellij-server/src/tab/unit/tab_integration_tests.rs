@@ -19769,3 +19769,48 @@ fn mouse_selection_state_cleared_when_client_drains_from_tab() {
         "selection flag must be cleared when clients are drained (tab switch)"
     );
 }
+
+#[test]
+fn close_pane_clears_mouse_selection_state_for_that_pane() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let client_id = 1;
+    let mode_info = ModeInfo::default();
+    let mut tab = create_new_tab(size, mode_info);
+
+    let new_pane_id = PaneId::Terminal(2);
+    tab.new_pane(
+        new_pane_id,
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::default(),
+        Some(client_id),
+        None,
+    )
+    .unwrap();
+
+    // Start selection on pane 2 — click at column 90 to hit right pane
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_press_event(Position::new(5, 90)),
+        client_id,
+    )
+    .unwrap();
+    assert_eq!(
+        tab.selecting_with_mouse_in_pane,
+        Some(new_pane_id),
+        "selection should target pane 2"
+    );
+
+    // Close pane 2
+    tab.close_pane(new_pane_id, false, None);
+
+    // Flag should already be cleared by close_pane
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_none(),
+        "close_pane must clear selection flag for the closed pane"
+    );
+}
