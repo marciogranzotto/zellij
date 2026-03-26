@@ -2618,6 +2618,13 @@ impl Tab {
         self.mouse_last_pane_id.remove(&client_id);
         self.last_mouse_activity_time.remove(&client_id);
         self.pane_drawings.remove(&client_id);
+        // Clear any in-progress mouse state — the departing client can no longer
+        // complete mouse gestures, and leaving stale state causes the next client
+        // that attaches to find mouse handling broken.
+        if self.connected_clients.borrow().is_empty() {
+            self.selecting_with_mouse_in_pane = None;
+            self.pane_being_resized_with_mouse = None;
+        }
         if is_connected_to_this_tab || was_dimmed {
             self.set_client_dimmed(client_id, false);
             self.set_force_render();
