@@ -541,3 +541,108 @@ pub(crate) fn input_loop(
     )
     .handle_input();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_termwiz_event(buttons: MouseButtons, x: u16, y: u16) -> TermwizMouseEvent {
+        TermwizMouseEvent {
+            x,
+            y,
+            mouse_buttons: buttons,
+            modifiers: Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn from_termwiz_normal_press_release_cycle() {
+        let mut old = MouseEvent::new();
+
+        // Press left
+        let ev = from_termwiz(&mut old, make_termwiz_event(MouseButtons::LEFT, 5, 5));
+        assert_eq!(ev.event_type, MouseEventType::Press);
+        assert!(ev.left);
+
+        // Drag (LEFT | DRAG)
+        let ev = from_termwiz(
+            &mut old,
+            make_termwiz_event(MouseButtons::LEFT | MouseButtons::DRAG, 6, 5),
+        );
+        assert_eq!(ev.event_type, MouseEventType::Motion);
+        assert!(ev.left);
+
+        // Release (empty buttons)
+        let ev = from_termwiz(&mut old, make_termwiz_event(MouseButtons::NONE, 6, 5));
+        assert_eq!(ev.event_type, MouseEventType::Release);
+        assert!(ev.left);
+    }
+
+    #[test]
+    fn from_termwiz_press_correctly_classified_after_lost_release() {
+        let mut old = MouseEvent::new();
+
+        // Press left — sets old.left = true
+        let ev = from_termwiz(&mut old, make_termwiz_event(MouseButtons::LEFT, 5, 5));
+        assert_eq!(ev.event_type, MouseEventType::Press);
+
+        // Simulate lost release: don't send a release event.
+        // Instead, send a new press directly (no DRAG flag).
+        let ev = from_termwiz(&mut old, make_termwiz_event(MouseButtons::LEFT, 10, 10));
+        assert_eq!(
+            ev.event_type,
+            MouseEventType::Press,
+            "new press must NOT be misclassified as Motion even when old_event.left is stale"
+        );
+        assert!(ev.left);
+    }
+
+    #[test]
+    fn from_termwiz_drag_after_lost_release_is_motion() {
+        let mut old = MouseEvent::new();
+
+        // Press left
+        from_termwiz(&mut old, make_termwiz_event(MouseButtons::LEFT, 5, 5));
+
+        // Lost release — send a drag event (LEFT | DRAG)
+        let ev = from_termwiz(
+            &mut old,
+            make_termwiz_event(MouseButtons::LEFT | MouseButtons::DRAG, 6, 6),
+        );
+        assert_eq!(
+            ev.event_type,
+            MouseEventType::Motion,
+            "drag with DRAG flag should be Motion, not Press"
+        );
+    }
+
+    #[test]
+    fn from_termwiz_buttonless_motion_after_clean_release() {
+        let mut old = MouseEvent::new();
+
+        // Press + release
+        from_termwiz(&mut old, make_termwiz_event(MouseButtons::LEFT, 5, 5));
+        from_termwiz(&mut old, make_termwiz_event(MouseButtons::NONE, 5, 5));
+
+        // Buttonless motion
+        let ev = from_termwiz(&mut old, make_termwiz_event(MouseButtons::NONE, 7, 7));
+        assert_eq!(ev.event_type, MouseEventType::Motion);
+        assert!(!ev.left);
+    }
+
+    #[test]
+    fn from_termwiz_wheel_is_always_press() {
+        let mut old = MouseEvent::new();
+
+        let ev = from_termwiz(
+            &mut old,
+            make_termwiz_event(
+                MouseButtons::VERT_WHEEL | MouseButtons::WHEEL_POSITIVE,
+                5,
+                5,
+            ),
+        );
+        assert_eq!(ev.event_type, MouseEventType::Press);
+        assert!(ev.wheel_up);
+    }
+}

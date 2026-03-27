@@ -288,7 +288,7 @@ pub(crate) struct Tab {
     auto_layout: bool,
     pending_vte_events: HashMap<u32, Vec<VteBytes>>,
     pub selecting_with_mouse_in_pane: Option<PaneId>, // this is only pub for the tests
-    pane_being_resized_with_mouse: Option<PaneResizeState>,
+    pub pane_being_resized_with_mouse: Option<PaneResizeState>, // pub for tests
     link_handler: Rc<RefCell<LinkHandler>>,
     clipboard_provider: ClipboardProvider,
     // TODO: used only to focus the pane when the layout is loaded
@@ -6549,6 +6549,9 @@ impl Tab {
         }
         if self.pane_being_resized_with_mouse.as_ref().map(|r| r.pane_id) == Some(id) {
             self.pane_being_resized_with_mouse = None;
+        }
+        if self.floating_panes.pane_being_moved_with_mouse_id() == Some(id) {
+            self.floating_panes.clear_pane_being_moved_with_mouse();
         }
         let closed_pane = if self.floating_panes.panes_contain(&id) {
             let closed_pane = self.floating_panes.remove_pane(id);

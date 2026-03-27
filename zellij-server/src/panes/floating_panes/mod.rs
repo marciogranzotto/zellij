@@ -1724,6 +1724,9 @@ impl FloatingPanes {
     pub fn pane_is_being_moved_with_mouse(&self) -> bool {
         self.pane_being_moved_with_mouse.is_some()
     }
+    pub fn pane_being_moved_with_mouse_id(&self) -> Option<PaneId> {
+        self.pane_being_moved_with_mouse.map(|(id, _, _)| id)
+    }
     pub fn clear_pane_being_moved_with_mouse(&mut self) {
         self.pane_being_moved_with_mouse = None;
     }

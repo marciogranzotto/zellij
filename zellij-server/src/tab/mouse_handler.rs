@@ -590,20 +590,7 @@ impl MouseHandler {
             return Ok(effect);
         }
         Self::forget_unfinished_pane_drawing(tab, event, client_id);
-        // Safety reset: if a new Press arrives while a mouse gesture is in progress,
-        // the previous gesture ended without a Release (e.g., window lost focus).
-        // Clear the stale state so this Press is handled normally.
-        if event.event_type == MouseEventType::Press && event.left {
-            if tab.selecting_with_mouse_in_pane.is_some() {
-                tab.selecting_with_mouse_in_pane = None;
-            }
-            if tab.pane_being_resized_with_mouse.is_some() {
-                tab.pane_being_resized_with_mouse = None;
-            }
-            if tab.floating_panes.pane_is_being_moved_with_mouse() {
-                tab.floating_panes.clear_pane_being_moved_with_mouse();
-            }
-        }
+        Self::forget_unfinished_mouse_gestures(tab, event);
         let click_count = Self::count_click(tab, event, client_id);
         let mut context =
             Self::gather_mouse_event_context(tab, event, client_id, passthrough_pane_id)?;
@@ -630,6 +617,22 @@ impl MouseHandler {
         if is_button_press && tab.pane_drawings.remove(&client_id).is_some() {
             tab.set_force_render();
         }
+    }
+
+    // A button Press while a selection, resize or floating-pane move is still in progress means
+    // the gesture's Release never arrived (e.g. the terminal window lost focus mid-drag). Drop the
+    // stale state so this Press is handled normally instead of being swallowed by that gesture.
+    // Wheel events are Presses too, but they legitimately arrive mid-gesture (scrolling while
+    // selecting), so they don't count.
+    fn forget_unfinished_mouse_gestures(tab: &mut Tab, event: &MouseEvent) {
+        let is_button_press = event.event_type == MouseEventType::Press
+            && (event.left || event.right || event.middle);
+        if !is_button_press {
+            return;
+        }
+        tab.selecting_with_mouse_in_pane = None;
+        tab.pane_being_resized_with_mouse = None;
+        tab.floating_panes.clear_pane_being_moved_with_mouse();
     }
 
     fn count_click(tab: &mut Tab, event: &MouseEvent, client_id: ClientId) -> u8 {

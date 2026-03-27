@@ -25,6 +25,8 @@ use zellij_utils::input::layout::{
     SwapTiledLayout, TiledPaneLayout,
 };
 use zellij_utils::input::mouse::MouseEvent;
+use zellij_utils::pane_size::PaneGeom;
+use crate::tab::{PaneEdge, PaneResizeState};
 use zellij_utils::ipc::IpcReceiverWithContext;
 use zellij_utils::pane_size::{Size, SizeInPixels};
 use zellij_utils::position::Position;
@@ -19862,5 +19864,104 @@ fn stuck_mouse_selection_recovers_on_next_left_press() {
     assert!(
         tab.selecting_with_mouse_in_pane.is_none(),
         "selection flag should be cleared after release"
+    );
+}
+
+#[test]
+fn stuck_mouse_selection_recovers_on_right_click() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let client_id = 1;
+    let mode_info = ModeInfo::default();
+    let mut tab = create_new_tab(size, mode_info);
+
+    // Start selection
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_some(),
+        "selection should be in progress"
+    );
+
+    // Simulate lost Release — send a right-click Press directly.
+    // The safety reset should clear the stuck selection on ANY Press,
+    // not just left Press.
+    tab.handle_mouse_event(
+        &MouseEvent::new_right_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.selecting_with_mouse_in_pane.is_none(),
+        "right-click Press should clear stuck selection state"
+    );
+}
+
+#[test]
+fn stuck_resize_state_recovers_on_next_press() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let client_id = 1;
+    let mode_info = ModeInfo::default();
+    let mut tab = create_new_tab(size, mode_info);
+
+    // Simulate stuck resize state by setting it directly
+    tab.pane_being_resized_with_mouse = Some(PaneResizeState {
+        pane_id: PaneId::Terminal(1),
+        edge: PaneEdge::Bottom,
+        start_position: Position::new(10, 60),
+        start_geom: PaneGeom::default(),
+        is_floating: false,
+    });
+
+    // Send a new left Press — should clear the stuck resize state
+    tab.handle_mouse_event(
+        &MouseEvent::new_left_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.pane_being_resized_with_mouse.is_none(),
+        "new Press should clear stuck resize state"
+    );
+}
+
+#[test]
+fn stuck_resize_state_recovers_on_right_click() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let client_id = 1;
+    let mode_info = ModeInfo::default();
+    let mut tab = create_new_tab(size, mode_info);
+
+    // Simulate stuck resize state
+    let pane_id = tab.get_active_pane_id(client_id).unwrap();
+    let pane_geom = tab.get_pane_with_id(pane_id).unwrap().position_and_size();
+    tab.pane_being_resized_with_mouse = Some(PaneResizeState {
+        pane_id,
+        edge: PaneEdge::Bottom,
+        start_position: Position::new(10, 60),
+        start_geom: pane_geom,
+        is_floating: false,
+    });
+
+    // Right-click should also clear stuck resize state
+    tab.handle_mouse_event(
+        &MouseEvent::new_right_press_event(Position::new(5, 10)),
+        client_id,
+    )
+    .unwrap();
+    assert!(
+        tab.pane_being_resized_with_mouse.is_none(),
+        "right-click should clear stuck resize state"
     );
 }
