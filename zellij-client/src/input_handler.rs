@@ -75,36 +75,31 @@ pub fn from_termwiz(old_event: &mut MouseEvent, event: TermwizMouseEvent) -> Mou
     termwiz_mouse_convert(&mut new_event, &event);
     new_event.position = Position::new(event.y.saturating_sub(1) as i32, event.x.saturating_sub(1));
 
-    if (new_event.left && !old_event.left)
-        || (new_event.right && !old_event.right)
-        || (new_event.middle && !old_event.middle)
-        || new_event.wheel_up
-        || new_event.wheel_down
-        || new_event.wheel_left
-        || new_event.wheel_right
-    {
-        // This is a mouse Press event.
+    // The DRAG flag from termwiz tells us definitively whether this is a
+    // fresh press or a drag (button held + motion), based on the SGR
+    // protocol (button code 0 = press, code 32 = drag).  This lets us
+    // correctly identify Press events even when old_event has stale state
+    // from a lost Release.
+    let is_drag = event.mouse_buttons.contains(MouseButtons::DRAG);
+    let buttons_without_drag = event.mouse_buttons.difference(MouseButtons::DRAG);
+
+    let has_buttons = !buttons_without_drag.is_empty();
+    let has_held_buttons = old_event.left || old_event.right || old_event.middle;
+
+    if has_buttons && !is_drag {
+        // SGR protocol says this is a press, not a drag.  Trust it
+        // over old_event — this handles the case where a Release was
+        // lost and old_event still has a stale button.  Wheel events
+        // never carry DRAG, so they always land here as a Press.
         new_event.event_type = MouseEventType::Press;
-
-        // Hang onto the button state.
         *old_event = new_event;
-    } else if event.mouse_buttons.is_empty()
-        && !old_event.left
-        && !old_event.right
-        && !old_event.middle
-    {
-        // This is a mouse Motion event (no buttons are down).
+    } else if !has_buttons && !has_held_buttons {
+        // No buttons in event or old_event — buttonless motion.
         new_event.event_type = MouseEventType::Motion;
-
-        // Hang onto the button state.
         *old_event = new_event;
-    } else if event.mouse_buttons.is_empty()
-        && (old_event.left || old_event.right || old_event.middle)
-    {
-        // This is a mouse Release event.  Note that we set
-        // old_event.{button} to false (to release), but set ONLY the
-        // new_event that were released to true before sending the
-        // event up.
+    } else if !has_buttons && has_held_buttons {
+        // Buttons were held but now empty — Release.  Set ONLY the
+        // buttons that were released to true before sending the event.
         if old_event.left {
             old_event.left = false;
             new_event.left = true;
@@ -119,8 +114,7 @@ pub fn from_termwiz(old_event: &mut MouseEvent, event: TermwizMouseEvent) -> Mou
         }
         new_event.event_type = MouseEventType::Release;
     } else {
-        // Dragging with some button down.  Return it as a Motion
-        // event, and hang on to the button state.
+        // Dragging with button held.
         new_event.event_type = MouseEventType::Motion;
         *old_event = new_event;
     }

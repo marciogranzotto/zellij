@@ -115,6 +115,10 @@ bitflags! {
         /// if set then the wheel movement was in the positive
         /// direction, else the negative direction
         const WHEEL_POSITIVE = 1<<6;
+        /// Set when the event is a drag (button held + motion), not a
+        /// fresh press.  Derived from the SGR mouse protocol where
+        /// press and drag use different button codes.
+        const DRAG = 1<<7;
     }
 }
 
@@ -757,9 +761,12 @@ fn decode_mouse_button(control: u8, p0: i64) -> Option<MouseButton> {
 impl From<MouseButton> for MouseButtons {
     fn from(button: MouseButton) -> MouseButtons {
         match button {
-            MouseButton::Button1Press | MouseButton::Button1Drag => MouseButtons::LEFT,
-            MouseButton::Button2Press | MouseButton::Button2Drag => MouseButtons::MIDDLE,
-            MouseButton::Button3Press | MouseButton::Button3Drag => MouseButtons::RIGHT,
+            MouseButton::Button1Press => MouseButtons::LEFT,
+            MouseButton::Button1Drag => MouseButtons::LEFT | MouseButtons::DRAG,
+            MouseButton::Button2Press => MouseButtons::MIDDLE,
+            MouseButton::Button2Drag => MouseButtons::MIDDLE | MouseButtons::DRAG,
+            MouseButton::Button3Press => MouseButtons::RIGHT,
+            MouseButton::Button3Drag => MouseButtons::RIGHT | MouseButtons::DRAG,
             MouseButton::Button4Press => MouseButtons::VERT_WHEEL | MouseButtons::WHEEL_POSITIVE,
             MouseButton::Button5Press => MouseButtons::VERT_WHEEL,
             MouseButton::Button6Press => MouseButtons::HORZ_WHEEL | MouseButtons::WHEEL_POSITIVE,
