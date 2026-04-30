@@ -113,6 +113,7 @@ pub fn from_termwiz(old_event: &mut MouseEvent, event: TermwizMouseEvent) -> Mou
             new_event.middle = true;
         }
         new_event.event_type = MouseEventType::Release;
+        old_event.event_type = MouseEventType::Release;
     } else {
         // Dragging with button held.
         new_event.event_type = MouseEventType::Motion;
@@ -576,6 +577,10 @@ mod tests {
         let ev = from_termwiz(&mut old, make_termwiz_event(MouseButtons::NONE, 6, 5));
         assert_eq!(ev.event_type, MouseEventType::Release);
         assert!(ev.left);
+
+        // Verify old_event.event_type is updated to Release (not stale Press)
+        assert_eq!(old.event_type, MouseEventType::Release);
+        assert!(!old.left);
     }
 
     #[test]
