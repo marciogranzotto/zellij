@@ -7363,6 +7363,104 @@ fn kitty_cursor_unmoved_with_c1() {
 }
 
 #[test]
+fn kitty_placeholder_diacritic_sequence_is_invalidated_by_cursor_reposition() {
+    use crate::panes::kitty_graphics::PLACEHOLDER_CHAR;
+    let (mut grid, _kitty_image_store) = new_kitty_grid(10, 10);
+    let mut vte_parser = vte::Parser::new();
+    let mut interceptor = KittyApcInterceptor::new();
+    // print a lone placeholder cell at (0, 0) with no diacritics yet - this arms
+    // pending_kitty_placeholder for (x: 0, y: 0), waiting at cursor (1, 0)
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        PLACEHOLDER_CHAR.to_string().as_bytes(),
+    );
+    let placeholder_char_before = grid.viewport[0].columns[0].character;
+    assert_ne!(placeholder_char_before, PLACEHOLDER_CHAR);
+    // CSI H repositions the cursor directly back to (1, 0) without printing
+    // anything - this must not leave pending_kitty_placeholder armed, or a
+    // real combining mark printed next would be folded into the placeholder
+    // cell's stored row/column/id-msb instead of being dropped as ordinary
+    // (if unsupported) zero-width text
+    feed_kitty_bytes(&mut grid, &mut vte_parser, &mut interceptor, b"\x1b[1;2H");
+    assert_eq!(grid.pending_kitty_placeholder, None);
+    // U+0305 is a real Unicode combining mark that also happens to be the
+    // first entry in the kitty row/column diacritic table
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        '\u{0305}'.to_string().as_bytes(),
+    );
+    assert_eq!(
+        grid.viewport[0].columns[0].character, placeholder_char_before,
+        "a stray combining mark after an unrelated cursor reposition must not mutate the earlier placeholder cell"
+    );
+}
+
+#[test]
+fn kitty_placeholder_diacritic_sequence_is_invalidated_by_alternate_screen_switch() {
+    use crate::panes::kitty_graphics::PLACEHOLDER_CHAR;
+    let (mut grid, _kitty_image_store) = new_kitty_grid(10, 10);
+    let mut vte_parser = vte::Parser::new();
+    let mut interceptor = KittyApcInterceptor::new();
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        PLACEHOLDER_CHAR.to_string().as_bytes(),
+    );
+    let placeholder_char_before = grid.viewport[0].columns[0].character;
+    // enter the alternate screen, then leave it - on return the cursor is
+    // restored to (1, 0), the exact position pending_kitty_placeholder was
+    // waiting at, even though a whole screen swap happened in between
+    feed_kitty_bytes(&mut grid, &mut vte_parser, &mut interceptor, b"\x1b[?1049h");
+    feed_kitty_bytes(&mut grid, &mut vte_parser, &mut interceptor, b"\x1b[?1049l");
+    assert_eq!(grid.pending_kitty_placeholder, None);
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        '\u{0305}'.to_string().as_bytes(),
+    );
+    assert_eq!(
+        grid.viewport[0].columns[0].character, placeholder_char_before,
+        "a stray combining mark after an alternate-screen round trip must not mutate the earlier placeholder cell"
+    );
+}
+
+#[test]
+fn kitty_placeholder_falls_back_to_space_once_interner_is_exhausted() {
+    use crate::panes::kitty_graphics::{PlaceholderCell, MAX_ENCODED_ENTRIES, PLACEHOLDER_CHAR};
+    let (mut grid, _kitty_image_store) = new_kitty_grid(10, 10);
+    let mut vte_parser = vte::Parser::new();
+    let mut interceptor = KittyApcInterceptor::new();
+    // fill every slot with a distinct cell that isn't PlaceholderCell::default()
+    // (row 0, column 0, id-msb 0) - that's what the placeholder below will
+    // encode to, since it has no left neighbor to inherit from, and encode()
+    // dedupes rather than allocating a fresh slot for an already-interned cell
+    for row in 1..=MAX_ENCODED_ENTRIES {
+        grid.kitty_placeholder_interner.encode(PlaceholderCell {
+            image_row: row as u16,
+            image_column: 0,
+            image_id_msb: 0,
+        });
+    }
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        PLACEHOLDER_CHAR.to_string().as_bytes(),
+    );
+    assert_eq!(grid.viewport[0].columns[0].character, ' ');
+    assert_eq!(
+        grid.pending_kitty_placeholder, None,
+        "a placeholder that failed to encode has no cell to fold diacritics into"
+    );
+}
+
+#[test]
 fn kitty_placement_survives_text_overwrite_and_erase() {
     let (mut grid, _kitty_image_store) = new_kitty_grid(20, 40);
     let mut vte_parser = vte::Parser::new();
@@ -10984,4 +11082,142 @@ fn stored_scrollback_blanks_rewrap_like_cells_on_resize() {
     }
     let texts: Vec<usize> = grid.viewport.iter().map(|row| row.width()).collect();
     assert_eq!(texts, vec![30, 30, 20, 30, 30]);
+}
+
+fn kitty_placeholder_cell(row_diacritic: char, column_diacritic: char) -> String {
+    use crate::panes::kitty_graphics::PLACEHOLDER_CHAR;
+    [PLACEHOLDER_CHAR, row_diacritic, column_diacritic]
+        .iter()
+        .collect()
+}
+
+#[test]
+fn kitty_placeholder_cells_letterbox_an_unscaled_image_with_in_cell_offsets() {
+    let (mut grid, _kitty_image_store) = new_kitty_grid(10, 10);
+    let mut vte_parser = vte::Parser::new();
+    let mut interceptor = KittyApcInterceptor::new();
+    // a 20x10 px image in a 2x2 cell box of 10x20 px cells (20x40 px): it
+    // fits at its own size, centered vertically with a 15 px margin
+    let rgba = vec![255u8; 20 * 10 * 4];
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        &kitty_apc("a=T,f=32,s=20,v=10,i=1,U=1,c=2,r=2,q=2", &rgba),
+    );
+    let mut cells = String::from("\x1b[38;5;1m");
+    cells.push_str(&kitty_placeholder_cell('\u{0305}', '\u{0305}'));
+    cells.push_str(&kitty_placeholder_cell('\u{0305}', '\u{030D}'));
+    cells.push_str("\r\n");
+    cells.push_str(&kitty_placeholder_cell('\u{030D}', '\u{0305}'));
+    cells.push_str(&kitty_placeholder_cell('\u{030D}', '\u{030D}'));
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        cells.as_bytes(),
+    );
+
+    let chunks = grid.placeholder_kitty_chunks(0, 0);
+    assert_eq!(chunks.len(), 2, "one chunk per image row");
+    let geometry: Vec<_> = chunks
+        .iter()
+        .map(|chunk| {
+            (
+                (chunk.cell_x, chunk.cell_y),
+                (chunk.cell_offset_x, chunk.cell_offset_y),
+                (chunk.source_px_x, chunk.source_px_y),
+                (chunk.source_px_width, chunk.source_px_height),
+                chunk.scaled_image,
+            )
+        })
+        .collect();
+    assert_eq!(
+        geometry,
+        vec![
+            ((0, 0), (0, 15), (0, 0), (20, 5), None),
+            ((0, 1), (0, 0), (0, 5), (20, 5), None),
+        ],
+        "the top row shows the image's first 5 px below the margin, the bottom row the rest"
+    );
+    for x in 0..2 {
+        assert!(
+            !grid.viewport[0].columns[x].has_attached(),
+            "diacritics are folded into the cell, never attached to it"
+        );
+    }
+}
+
+#[test]
+fn kitty_placeholder_cells_scale_a_large_image_to_its_fitted_size() {
+    let (mut grid, kitty_image_store) = new_kitty_grid(10, 10);
+    let mut vte_parser = vte::Parser::new();
+    let mut interceptor = KittyApcInterceptor::new();
+    // a 40x10 px image in a single 10x20 px cell scales to 10x3 (rounded
+    // from 2.5), centered vertically with an 8 px margin
+    let rgba = vec![255u8; 40 * 10 * 4];
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        &kitty_apc("a=T,f=32,s=40,v=10,i=1,U=1,c=1,r=1,q=2", &rgba),
+    );
+    let mut cells = String::from("\x1b[38;5;1m");
+    cells.push_str(&kitty_placeholder_cell('\u{0305}', '\u{0305}'));
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        cells.as_bytes(),
+    );
+
+    let chunks = grid.placeholder_kitty_chunks(0, 0);
+    assert_eq!(chunks.len(), 1);
+    let chunk = &chunks[0];
+    assert_eq!((chunk.cell_offset_x, chunk.cell_offset_y), (0, 8));
+    assert_eq!((chunk.source_px_x, chunk.source_px_y), (0, 0));
+    assert_eq!((chunk.source_px_width, chunk.source_px_height), (10, 3));
+    let key = chunk.scaled_image.expect("a scaled variant");
+    assert_eq!(key.size, (10, 3));
+    assert_eq!(
+        (key.source.x, key.source.y, key.source.width, key.source.height),
+        (0, 0, 40, 10),
+        "the variant is the whole image, scaled, under the same key a positioned placement would use"
+    );
+    assert_eq!(
+        kitty_image_store
+            .borrow()
+            .scaled_variant(chunk.internal_image_id, key)
+            .map(|bytes| bytes.len()),
+        Some(10 * 3 * 4)
+    );
+}
+
+#[test]
+fn kitty_placeholder_cell_never_takes_attached_marks() {
+    let (mut grid, _kitty_image_store) = new_kitty_grid(10, 10);
+    let mut vte_parser = vte::Parser::new();
+    let mut interceptor = KittyApcInterceptor::new();
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        crate::panes::kitty_graphics::PLACEHOLDER_CHAR
+            .to_string()
+            .as_bytes(),
+    );
+    // reposition onto the cell right after the placeholder (disarming the
+    // diacritic sequence), then print a combining mark and a variation
+    // selector that would otherwise attach to the placeholder cell
+    feed_kitty_bytes(&mut grid, &mut vte_parser, &mut interceptor, b"\x1b[1;2H");
+    feed_kitty_bytes(
+        &mut grid,
+        &mut vte_parser,
+        &mut interceptor,
+        "\u{0301}\u{FE0F}".as_bytes(),
+    );
+    assert!(
+        !grid.viewport[0].columns[0].has_attached(),
+        "an encoded placeholder cell must not carry attached marks to the host terminal"
+    );
 }
