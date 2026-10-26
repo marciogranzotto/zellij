@@ -2707,7 +2707,7 @@ mod test {
             vec![InputEvent::Mouse(MouseEvent {
                 x: 5,
                 y: 5,
-                mouse_buttons: MouseButtons::LEFT,
+                mouse_buttons: MouseButtons::LEFT | MouseButtons::DRAG,
                 modifiers: Modifiers::NONE,
             })]
         );

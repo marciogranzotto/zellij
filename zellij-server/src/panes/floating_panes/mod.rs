@@ -1713,11 +1713,6 @@ impl FloatingPanes {
         self.pane_being_moved_with_mouse = Some((pane_id, last_position, last_position));
     }
     #[cfg(test)]
-    pub fn pane_being_moved_with_mouse_id(&self) -> Option<PaneId> {
-        self.pane_being_moved_with_mouse
-            .map(|(pane_id, _, _)| pane_id)
-    }
-    #[cfg(test)]
     pub fn panes_with_logged_render_errors(&self) -> &HashSet<PaneId> {
         &self.panes_with_logged_render_errors
     }

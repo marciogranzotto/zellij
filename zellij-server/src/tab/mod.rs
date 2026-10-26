@@ -6491,6 +6491,12 @@ impl Tab {
         if self.selecting_with_mouse_in_pane == Some(id) {
             self.selecting_with_mouse_in_pane = None;
         }
+        if self.pane_being_resized_with_mouse.as_ref().map(|r| r.pane_id) == Some(id) {
+            self.pane_being_resized_with_mouse = None;
+        }
+        if self.floating_panes.pane_being_moved_with_mouse_id() == Some(id) {
+            self.floating_panes.clear_pane_being_moved_with_mouse();
+        }
         self.forget_typed_input(id);
         let id_parks_a_different_pane = self.pane_parked_by(&id).is_some();
         if !ignore_suppressed_panes
@@ -6542,16 +6548,6 @@ impl Tab {
                         .non_fatal();
                 },
             };
-        }
-        // Clear mouse state if the closing pane is involved in a mouse gesture
-        if self.selecting_with_mouse_in_pane == Some(id) {
-            self.selecting_with_mouse_in_pane = None;
-        }
-        if self.pane_being_resized_with_mouse.as_ref().map(|r| r.pane_id) == Some(id) {
-            self.pane_being_resized_with_mouse = None;
-        }
-        if self.floating_panes.pane_being_moved_with_mouse_id() == Some(id) {
-            self.floating_panes.clear_pane_being_moved_with_mouse();
         }
         let closed_pane = if self.floating_panes.panes_contain(&id) {
             let closed_pane = self.floating_panes.remove_pane(id);
