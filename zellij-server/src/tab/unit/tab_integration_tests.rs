@@ -13,6 +13,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use crate::tab::{PaneEdge, PaneResizeState};
 use zellij_utils::channels::Receiver;
 use zellij_utils::data::Resize;
 use zellij_utils::data::ResizeStrategy;
@@ -25,9 +26,8 @@ use zellij_utils::input::layout::{
     SwapTiledLayout, TiledPaneLayout,
 };
 use zellij_utils::input::mouse::MouseEvent;
-use zellij_utils::pane_size::PaneGeom;
-use crate::tab::{PaneEdge, PaneResizeState};
 use zellij_utils::ipc::IpcReceiverWithContext;
+use zellij_utils::pane_size::PaneGeom;
 use zellij_utils::pane_size::{Size, SizeInPixels};
 use zellij_utils::position::Position;
 

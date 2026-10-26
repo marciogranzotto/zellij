@@ -6491,7 +6491,12 @@ impl Tab {
         if self.selecting_with_mouse_in_pane == Some(id) {
             self.selecting_with_mouse_in_pane = None;
         }
-        if self.pane_being_resized_with_mouse.as_ref().map(|r| r.pane_id) == Some(id) {
+        if self
+            .pane_being_resized_with_mouse
+            .as_ref()
+            .map(|r| r.pane_id)
+            == Some(id)
+        {
             self.pane_being_resized_with_mouse = None;
         }
         if self.floating_panes.pane_being_moved_with_mouse_id() == Some(id) {

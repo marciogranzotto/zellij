@@ -85,10 +85,7 @@ fn full_shortcut_list_nonstandard_mode(help: &ModeInfo) -> LinePart {
     line_part
 }
 
-fn plugin_key(
-    keymap: &[(KeyWithModifier, Vec<Action>)],
-    plugin_url: &str,
-) -> Vec<KeyWithModifier> {
+fn plugin_key(keymap: &[(KeyWithModifier, Vec<Action>)], plugin_url: &str) -> Vec<KeyWithModifier> {
     keymap
         .iter()
         .find_map(|(key, acvec)| {
